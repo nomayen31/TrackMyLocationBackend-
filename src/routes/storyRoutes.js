@@ -20,13 +20,19 @@ async function getMembership(groupId, userId) {
 }
 
 // Story columns + author + viewer-specific `viewed` flag.
+// View-once stories that the viewer hasn't opened yet are "locked": their media
+// and text are withheld here and only returned once, by POST /:id/view.
 const STORY_SELECT = `
   SELECT s.id,
          s.user_id    AS "userId",
          s.group_id   AS "groupId",
-         s.media,
+         CASE WHEN s.view_once AND s.user_id <> $1 AND sv.viewer_id IS NULL
+              THEN NULL ELSE s.media END AS media,
          s.media_type AS "mediaType",
-         s.text_content AS "text",
+         CASE WHEN s.view_once AND s.user_id <> $1 AND sv.viewer_id IS NULL
+              THEN NULL ELSE s.text_content END AS text,
+         CASE WHEN s.view_once AND s.user_id <> $1 AND sv.viewer_id IS NULL
+              THEN TRUE ELSE FALSE END AS locked,
          s.caption,
          s.privacy,
          s.view_once  AS "viewOnce",
@@ -236,13 +242,18 @@ function broadcastStory(req, story, audienceIds = []) {
   io.to(`user_${story.userId}`).emit('story-updated', story);
 }
 
-// POST /api/stories/:id/view  -> mark a story as viewed (drives view-once)
+// POST /api/stories/:id/view  -> mark a story as viewed (drives view-once).
+// For a view-once story this is the ONLY place its media/text is returned, and
+// only on the first successful view (afterwards the feed omits it and this
+// endpoint answers 410 Gone).
 router.post('/:id/view', async (req, res) => {
   try {
     const { id } = req.params;
 
     const found = await pool.query(
-      'SELECT id, user_id, group_id, privacy, view_once, expires_at FROM stories WHERE id = $1',
+      `SELECT id, user_id, group_id, privacy, view_once, media_type, media,
+              text_content, expires_at
+       FROM stories WHERE id = $1`,
       [id]
     );
     if (found.rows.length === 0) {
@@ -254,8 +265,10 @@ router.post('/:id/view', async (req, res) => {
       return res.status(403).json({ error: 'This story is not shared with you' });
     }
 
+    const isOwn = story.user_id === req.user.id;
+
     // Someone else's view-once story that this user already consumed.
-    if (story.view_once && story.user_id !== req.user.id) {
+    if (story.view_once && !isOwn) {
       const seen = await pool.query(
         'SELECT 1 FROM story_views WHERE story_id = $1 AND viewer_id = $2',
         [id, req.user.id]
@@ -265,7 +278,7 @@ router.post('/:id/view', async (req, res) => {
       }
     }
 
-    if (story.user_id !== req.user.id) {
+    if (!isOwn) {
       await pool.query(
         `INSERT INTO story_views (story_id, viewer_id) VALUES ($1, $2)
          ON CONFLICT (story_id, viewer_id) DO NOTHING`,
@@ -273,7 +286,13 @@ router.post('/:id/view', async (req, res) => {
       );
     }
 
-    res.json({ ok: true, viewOnce: story.view_once });
+    // Reveal the payload once for a one-time story.
+    const payload =
+      story.view_once && !isOwn
+        ? { media: story.media, mediaType: story.media_type, text: story.text_content }
+        : null;
+
+    res.json({ ok: true, viewOnce: story.view_once, payload });
   } catch (err) {
     console.error('View story error:', err);
     res.status(500).json({ error: 'Failed to record view' });
