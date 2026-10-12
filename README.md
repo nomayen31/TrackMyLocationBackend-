@@ -102,13 +102,20 @@ Authenticated via the Better Auth session cookie (`src/middleware/socketAuth.js`
 
 ## Project layout
 ```
+index.js            entry point (keeps `node index.js` working)
+Dockerfile          container image for Render / Railway / Fly
+render.yaml         Render Blueprint
+railway.json        Railway config
 src/
   config/     db.js, origins.js
   middleware/ authMiddleware.js, socketAuth.js
-  routes/     auth, group, chat, expense, story, dm
-  sockets/    index, locationSocket, chatSocket, interactionSocket, storySocket, callSocket
+  routes/     auth, group, chat, expense, story, dm, safeZone, profile, voice
+  sockets/    index, locationSocket, chatSocket, interactionSocket, storySocket,
+              callSocket, sosSocket, adminSocket, voiceSocket
+  voice/      livekit.js, presence.js, voice-room.service.js, invitation.service.js
   attachments.js  stories.js   (shared helpers)
   auth.js     server.js   swagger.js
+test/               node:test suites (presence + services)
 schema.sql   seed.js   scripts/migrate.js
 ```
 
@@ -126,14 +133,23 @@ Recommended: **Render** or **Railway** (a `Dockerfile`, `render.yaml` and
 ### 1. Deploy the API (Render)
 
 1. Push this repo to GitHub (already done).
-2. Render Dashboard → **New → Blueprint** → pick this repo. Render reads
-   `render.yaml` and builds the included `Dockerfile`.
-3. Fill in the env vars it marks `sync: false` (see below).
+2. **Option A — Blueprint (uses the Dockerfile):** Render Dashboard →
+   **New → Blueprint** → pick this repo. Render reads `render.yaml`.
+   **Option B — plain Web Service (Node runtime):** New → **Web Service**, pick
+   the repo, and leave the start command as the default. `index.js` exists
+   specifically so the default `node index.js` boots the server, and
+   `npm start` (`node src/server.js`) is set as the explicit alternative.
+   If you prefer to be explicit, set **Start Command** to `node src/server.js`.
+3. Fill in the env vars below.
 4. Set `BETTER_AUTH_URL` to the service's own URL and `CLIENT_URL` to the
    deployed frontend origin, then redeploy so cookies/CORS match.
 
-Railway: **New Project → Deploy from GitHub**; it detects `Dockerfile`.
-Inject the same variables below and generate a public domain.
+> Build command: `npm install` (default). The `npm audit` summary during build is
+> informational — **do not** run `npm audit fix --force`, as it applies breaking
+> major-version upgrades to Express/Better Auth and will break the app.
+
+Railway: **New Project → Deploy from GitHub**; it detects `Dockerfile` or the
+`start` script. Inject the same variables below and generate a public domain.
 
 ### 2. Environment variables (set these on the host)
 

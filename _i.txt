@@ -1,0 +1,2 @@
+🚀 Server is running on port 5056
+📦 Connected to Neon PostgreSQL Database successfully!
