@@ -22,9 +22,13 @@ const voiceRoutes = require('./routes/voiceRoutes'); // 👈 Voice rooms Routes
 
 const app = express();
 
-// CORS for cookie-based auth across the Vite dev server and the API.
-// Any loopback port is trusted, so Vite can fall back to 5174/5175 when 5173
-// is already in use without breaking the API.
+// Behind Render/Railway/Fly there is a proxy in front of us. Trusting it is
+// required for `secure` cookies and for correct client IPs.
+app.set('trust proxy', 1);
+
+// CORS for cookie-based auth across the dev server, Vercel previews and the
+// deployed frontend. Any loopback port is trusted; CLIENT_URL / CORS_ORIGINS
+// cover production.
 app.use(
   cors({
     origin: corsOrigin,
@@ -70,6 +74,11 @@ handleSockets(io);
 
 app.get('/', (req, res) => {
   res.send('Trip Tracker Backend is running smoothly!');
+});
+
+// Health check for the host's readiness probe (Render/Railway/Fly).
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: Math.round(process.uptime()), env: process.env.NODE_ENV || 'development' });
 });
 
 const PORT = process.env.PORT || 5000;

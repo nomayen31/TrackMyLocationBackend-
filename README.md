@@ -112,7 +112,61 @@ src/
 schema.sql   seed.js   scripts/migrate.js
 ```
 
+## Deployment
+
+This backend is a **long-running Express + Socket.IO server** and keeps voice
+presence in memory, so it must run on a host that supports persistent WebSocket
+connections and a single stable process. **Vercel / Netlify functions are not
+suitable** — the API boots, but Socket.IO features (chat, live locations, voice
+signalling, presence) will not work there.
+
+Recommended: **Render** or **Railway** (a `Dockerfile`, `render.yaml` and
+`railway.json` are included).
+
+### 1. Deploy the API (Render)
+
+1. Push this repo to GitHub (already done).
+2. Render Dashboard → **New → Blueprint** → pick this repo. Render reads
+   `render.yaml` and builds the included `Dockerfile`.
+3. Fill in the env vars it marks `sync: false` (see below).
+4. Set `BETTER_AUTH_URL` to the service's own URL and `CLIENT_URL` to the
+   deployed frontend origin, then redeploy so cookies/CORS match.
+
+Railway: **New Project → Deploy from GitHub**; it detects `Dockerfile`.
+Inject the same variables below and generate a public domain.
+
+### 2. Environment variables (set these on the host)
+
+| Variable | Example |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | `postgresql://…neon.tech/neondb?sslmode=require` |
+| `BETTER_AUTH_SECRET` | `openssl rand -hex 32` |
+| `BETTER_AUTH_URL` | `https://trackmylocation-api.onrender.com` |
+| `CLIENT_URL` | `https://your-app.vercel.app` |
+| `CORS_ORIGINS` | optional extra origins, comma separated |
+| `LIVEKIT_URL` | `wss://trip-tracker-mgj9em5q.livekit.cloud` |
+| `LIVEKIT_API_KEY` | *(secret)* |
+| `LIVEKIT_API_SECRET` | *(secret)* |
+
+`PORT` is injected by the host — do not set it.
+
+> **Why `NODE_ENV=production` matters:** the frontend (Vercel) and API (Render)
+> are different *sites*, so the session cookie is issued `SameSite=None; Secure`.
+> That requires HTTPS on both sides (both hosts provide it).
+
+### 3. After deploying
+
+Run the migrations once against the production database:
+
+```bash
+DATABASE_URL="<prod connection string>" node scripts/migrate.js
+```
+
+Health check: `GET /health` → `{"ok":true,…}`. Swagger: `/api-docs`.
+
 ## Feature notes
+
 - **Media** (chat images + voice notes, story media) is stored as base64 data URLs in
   Postgres, matching the existing stories approach. Swap in object storage for production.
 - **Voice calls** are peer-to-peer (WebRTC); this server only relays signalling. Add a

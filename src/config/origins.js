@@ -1,9 +1,11 @@
 /**
  * Origin allow-list shared by Express, Socket.IO and Better Auth.
  *
- * The Vite dev server falls back to 5174, 5175, ... whenever 5173 is already
- * taken, so any loopback origin is accepted regardless of port. Non-local
- * frontends can be added with the CORS_ORIGINS env var (comma separated).
+ * - Any loopback origin (any port) is allowed, so the Vite dev server can fall
+ *   back to 5174/5175 without breaking the API.
+ * - `CLIENT_URL` (the deployed frontend) is always allowed.
+ * - `CORS_ORIGINS` accepts a comma-separated list for extra origins
+ *   (e.g. a Vercel preview URL or a custom domain).
  */
 
 const LOOPBACK_ORIGIN_PATTERN =
@@ -14,9 +16,11 @@ function normalize(origin) {
 }
 
 function extraOrigins() {
-  return (process.env.CORS_ORIGINS || '')
-    .split(',')
-    .map(normalize)
+  return [
+    process.env.CLIENT_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ]
+    .map((o) => (o ? normalize(o) : ''))
     .filter(Boolean);
 }
 
