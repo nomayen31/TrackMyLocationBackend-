@@ -38,6 +38,28 @@ See `.env.example`. `.env` holds real secrets and is gitignored.
 | `BETTER_AUTH_URL` | Public URL of this backend |
 | `CLIENT_URL` | Frontend URL, used to build invite links / QR targets |
 | `CORS_ORIGINS` | Optional extra allowed origins (comma separated) |
+| `LIVEKIT_URL` | LiveKit server URL (WSS) for group voice rooms |
+| `LIVEKIT_API_KEY` | LiveKit API key |
+| `LIVEKIT_API_SECRET` | LiveKit API secret — **server-only, never exposed to the browser** |
+
+## Voice rooms (LiveKit)
+Discord-style group voice. `LIVEKIT_*` above must be set or voice is disabled
+(the API returns `configured: false` and the UI says so).
+
+- **REST**: `GET /api/voice/config` (URL only — never the secret),
+  `GET /api/voice/rooms`, `POST /api/voice/rooms`, `GET /api/voice/rooms/:id`,
+  `GET /api/voice/invitations`
+- **Socket events**: `voice:room:create|join|leave|update|delete|list`,
+  `voice:participant:mute`, `voice:invite:send|accept|decline|list`
+- **Server → client**: `voice:room:participants`, `voice:room:updated`,
+  `voice:room:deleted`, `voice:participant:joined|left|mute`,
+  `voice:invite:received|accepted|declined`
+- Audio never travels through Socket.IO — the server only issues short-lived,
+  room-scoped LiveKit tokens; audio is WebRTC to LiveKit.
+- Presence is in-memory (`src/voice/presence.js`) and keyed by user id, never by
+  socket id, so multiple tabs for one user are handled correctly.
+- `npm test` runs the voice unit + integration suite (`node:test`).
+| `CORS_ORIGINS` | Optional extra allowed origins (comma separated) |
 
 ## REST API
 | Method | Path | Description |

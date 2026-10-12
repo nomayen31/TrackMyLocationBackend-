@@ -229,3 +229,62 @@ CREATE TABLE IF NOT EXISTS expense_shares (
 );
 
 CREATE INDEX IF NOT EXISTS idx_expense_shares_user ON expense_shares (user_id);
+
+-- ============================================================================
+-- Migration 5 — Discord-style group voice rooms (LiveKit)
+-- ============================================================================
+
+-- A voice room. `livekit_room` is the LiveKit room name we mint tokens for.
+CREATE TABLE IF NOT EXISTS voice_rooms (
+  id              SERIAL PRIMARY KEY,
+  name            VARCHAR(80) NOT NULL,
+  owner_id        text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  is_private      BOOLEAN NOT NULL DEFAULT FALSE,
+  max_participants INTEGER NOT NULL DEFAULT 8,
+  group_id        INTEGER REFERENCES groups (id) ON DELETE CASCADE,
+  livekit_room    TEXT NOT NULL UNIQUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_rooms_group ON voice_rooms (group_id);
+CREATE INDEX IF NOT EXISTS idx_voice_rooms_owner ON voice_rooms (owner_id);
+
+-- Who is allowed into a room (owners are inserted here too).
+CREATE TABLE IF NOT EXISTS voice_room_members (
+  room_id   INTEGER NOT NULL REFERENCES voice_rooms (id) ON DELETE CASCADE,
+  user_id   text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  role      VARCHAR(16) NOT NULL DEFAULT 'member', -- 'owner' | 'member'
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (room_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_room_members_user ON voice_room_members (user_id);
+
+-- Invitation-based access for private rooms.
+CREATE TABLE IF NOT EXISTS voice_invitations (
+  id           SERIAL PRIMARY KEY,
+  room_id      INTEGER NOT NULL REFERENCES voice_rooms (id) ON DELETE CASCADE,
+  sender_id    text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  recipient_id text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  status       VARCHAR(16) NOT NULL DEFAULT 'pending', -- pending|accepted|declined|expired|revoked
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NOT NULL,
+  responded_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_invitations_recipient ON voice_invitations (recipient_id, status);
+CREATE INDEX IF NOT EXISTS idx_voice_invitations_room ON voice_invitations (room_id, status);
+
+-- Only one *pending* invitation per (room, recipient) — prevents spam/duplicates.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_invitation_pending_unique
+  ON voice_invitations (room_id, recipient_id) WHERE status = 'pending';
+
+-- Optional bans (owner-managed).
+CREATE TABLE IF NOT EXISTS voice_room_bans (
+  room_id    INTEGER NOT NULL REFERENCES voice_rooms (id) ON DELETE CASCADE,
+  user_id    text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  banned_by  text NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (room_id, user_id)
+);

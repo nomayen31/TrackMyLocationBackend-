@@ -5,6 +5,7 @@ const storySocket = require('./storySocket'); // 👈 Trip stories
 const callSocket = require('./callSocket'); // 👈 WebRTC voice-call signalling
 const sosSocket = require('./sosSocket'); // 👈 Expedition SOS signal
 const adminSocket = require('./adminSocket'); // 👈 Safe zone + map broadcasts
+const voiceSocket = require('./voiceSocket'); // 👈 Discord-style group voice rooms
 const { loadZone } = require('../safeZones'); // 👈 Safe-zone state
 const socketAuth = require('../middleware/socketAuth'); // 👈 Import Socket Auth
 
@@ -49,6 +50,7 @@ module.exports = function handleSockets(io) {
     callSocket(io, socket); // 👈 Voice-call signalling
     sosSocket(io, socket); // 👈 Expedition SOS signal
     adminSocket(io, socket); // 👈 Safe zone + map broadcasts
+    voiceSocket(io, socket); // 👈 Group voice rooms (LiveKit)
 
     socket.on('disconnect', () => {
       console.log(`❌ User Disconnected: ${socket.id}`);
