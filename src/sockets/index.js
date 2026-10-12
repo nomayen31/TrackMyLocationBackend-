@@ -3,6 +3,7 @@ const chatSocket = require('./chatSocket'); // 👈 Import Chat Handler
 const interactionSocket = require('./interactionSocket'); // 👈 DM / vibrate / ring
 const storySocket = require('./storySocket'); // 👈 Trip stories
 const callSocket = require('./callSocket'); // 👈 WebRTC voice-call signalling
+const sosSocket = require('./sosSocket'); // 👈 Expedition SOS signal
 const socketAuth = require('../middleware/socketAuth'); // 👈 Import Socket Auth
 
 module.exports = function handleSockets(io) {
@@ -36,6 +37,7 @@ module.exports = function handleSockets(io) {
     interactionSocket(io, socket); // 👈 DM / vibrate / ring
     storySocket(io, socket); // 👈 Trip stories
     callSocket(io, socket); // 👈 Voice-call signalling
+    sosSocket(io, socket); // 👈 Expedition SOS signal
 
     socket.on('disconnect', () => {
       console.log(`❌ User Disconnected: ${socket.id}`);

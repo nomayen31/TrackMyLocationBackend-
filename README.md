@@ -62,15 +62,15 @@ Authenticated via the Better Auth session cookie (`src/middleware/socketAuth.js`
 
 **Chat / presence:** `join-group`, `leave-group`, `update-location`, `send-message`
 (text + `attachment`), `send-dm` (text + `attachment`), `vibrate-user`, `ring-user`,
-`stop-ring`, `post-story`
+`stop-ring`, `post-story`, `sos-alert`, `sos-clear`
 
 **WebRTC voice calls:** `call:invite`, `call:accept`, `call:reject`, `call:offer`,
 `call:answer`, `call:ice`, `call:end`
 
 **Server → Client:** `user-moved`, `receive-message`, `receive-dm`, `vibrate`, `ring`,
 `ring-stopped`, `story-updated`, `story-deleted`, `group-updated`,
-`removed-from-group`, `call:incoming`, `call:accepted`, `call:rejected`,
-`call:offer`, `call:answer`, `call:ice`, `call:ended`
+`removed-from-group`, `sos`, `sos-sent`, `sos-cleared`, `call:incoming`,
+`call:accepted`, `call:rejected`, `call:offer`, `call:answer`, `call:ice`, `call:ended`
 
 ## Project layout
 ```
