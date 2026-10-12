@@ -4,6 +4,8 @@ const interactionSocket = require('./interactionSocket'); // 👈 DM / vibrate /
 const storySocket = require('./storySocket'); // 👈 Trip stories
 const callSocket = require('./callSocket'); // 👈 WebRTC voice-call signalling
 const sosSocket = require('./sosSocket'); // 👈 Expedition SOS signal
+const adminSocket = require('./adminSocket'); // 👈 Safe zone + map broadcasts
+const { loadZone } = require('../safeZones'); // 👈 Safe-zone state
 const socketAuth = require('../middleware/socketAuth'); // 👈 Import Socket Auth
 
 module.exports = function handleSockets(io) {
@@ -19,10 +21,18 @@ module.exports = function handleSockets(io) {
     socket.join(`user_${userId}`);
 
     // Join Group Room (userId comes from the verified token, not the client)
-    socket.on('join-group', ({ groupId } = {}) => {
+    socket.on('join-group', async ({ groupId } = {}) => {
       if (!groupId) return;
       socket.join(`group_${groupId}`);
       console.log(`User ${userId} joined room: group_${groupId}`);
+
+      // Bring the newcomer up to speed on the current safe zone.
+      try {
+        const zone = await loadZone(groupId);
+        if (zone && zone.enabled) socket.emit('safe-zone-updated', zone);
+      } catch (err) {
+        console.error('Failed to send safe zone on join:', err.message);
+      }
     });
 
     // Leave a group room (e.g. when the user is removed from a trip).
@@ -38,6 +48,7 @@ module.exports = function handleSockets(io) {
     storySocket(io, socket); // 👈 Trip stories
     callSocket(io, socket); // 👈 Voice-call signalling
     sosSocket(io, socket); // 👈 Expedition SOS signal
+    adminSocket(io, socket); // 👈 Safe zone + map broadcasts
 
     socket.on('disconnect', () => {
       console.log(`❌ User Disconnected: ${socket.id}`);

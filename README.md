@@ -56,6 +56,7 @@ See `.env.example`. `.env` holds real secrets and is gitignored.
 | GET/POST/DELETE | `/api/stories` · `/api/stories/group/:groupId` · `/api/stories/:id` | Trip stories |
 | POST | `/api/stories/:id/view` | Mark viewed (enforces view-once → 410) |
 | GET/POST | `/api/dm` · `/api/dm/:otherUserId` | Direct messages (text + media) |
+| GET/PUT | `/api/safezone/:groupId` | Geofenced safe zone (GET for members, PUT for admins) |
 
 ## Socket.IO events
 Authenticated via the Better Auth session cookie (`src/middleware/socketAuth.js`).
@@ -64,13 +65,17 @@ Authenticated via the Better Auth session cookie (`src/middleware/socketAuth.js`
 (text + `attachment`), `send-dm` (text + `attachment`), `vibrate-user`, `ring-user`,
 `stop-ring`, `post-story`, `sos-alert`, `sos-clear`
 
+**Safety / admin:** `set-safe-zone`, `disable-safe-zone`, `admin-broadcast`
+
 **WebRTC voice calls:** `call:invite`, `call:accept`, `call:reject`, `call:offer`,
 `call:answer`, `call:ice`, `call:end`
 
 **Server → Client:** `user-moved`, `receive-message`, `receive-dm`, `vibrate`, `ring`,
 `ring-stopped`, `story-updated`, `story-deleted`, `group-updated`,
-`removed-from-group`, `sos`, `sos-sent`, `sos-cleared`, `call:incoming`,
-`call:accepted`, `call:rejected`, `call:offer`, `call:answer`, `call:ice`, `call:ended`
+`removed-from-group`, `sos`, `sos-sent`, `sos-cleared`, `safe-zone-updated`,
+`boundary-breach-alert`, `boundary-restored`, `admin-broadcast-message`,
+`call:incoming`, `call:accepted`, `call:rejected`, `call:offer`, `call:answer`,
+`call:ice`, `call:ended`
 
 ## Project layout
 ```

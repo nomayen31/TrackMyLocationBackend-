@@ -189,3 +189,19 @@ CREATE TABLE IF NOT EXISTS story_views (
   PRIMARY KEY (story_id, viewer_id)
 );
 CREATE INDEX IF NOT EXISTS idx_story_views_story ON story_views (story_id);
+
+-- ============================================================================
+-- Migration 3 — safety features
+-- ============================================================================
+
+-- Dynamic geofenced safe zone (one per group). The centre follows the admin
+-- who set it; all members get boundary-breach alerts.
+CREATE TABLE IF NOT EXISTS group_safe_zones (
+  group_id      INTEGER PRIMARY KEY REFERENCES groups (id) ON DELETE CASCADE,
+  radius_m      NUMERIC(10, 2) NOT NULL DEFAULT 500,
+  enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+  owner_user_id text REFERENCES "user" (id) ON DELETE SET NULL,
+  center_lat    DOUBLE PRECISION,
+  center_lng    DOUBLE PRECISION,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

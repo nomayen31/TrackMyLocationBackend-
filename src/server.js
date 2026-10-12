@@ -16,6 +16,7 @@ const groupRoutes = require('./routes/groupRoutes'); // 👈 Import Group Routes
 const expenseRoutes = require('./routes/expenseRoutes'); // 👈 Import Expense Routes
 const storyRoutes = require('./routes/storyRoutes'); // 👈 Trip stories Routes
 const dmRoutes = require('./routes/dmRoutes'); // 👈 Direct messages Routes
+const safeZoneRoutes = require('./routes/safeZoneRoutes'); // 👈 Safe zone Routes
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/chats', chatRoutes); // 👈 Chat API Endpoint
 app.use('/api/expenses', expenseRoutes); // 👈 Expenses API Endpoint (add / balance)
 app.use('/api/stories', storyRoutes); // 👈 Trip stories API Endpoint
 app.use('/api/dm', dmRoutes); // 👈 Direct messages API Endpoint
+app.use('/api/safezone', safeZoneRoutes); // 👈 Safe zone API Endpoint
 
 // Better Auth's own endpoints (/api/auth/sign-up/email, /sign-in/email, /get-session, ...)
 app.all('/api/auth/*splat', toNodeHandler(auth.handler));
