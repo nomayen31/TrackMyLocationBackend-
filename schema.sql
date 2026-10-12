@@ -135,3 +135,57 @@ CREATE TABLE IF NOT EXISTS direct_messages (
 CREATE INDEX IF NOT EXISTS idx_dm_conversation
   ON direct_messages (from_user, to_user, created_at);
 CREATE INDEX IF NOT EXISTS idx_dm_inbox ON direct_messages (to_user, created_at);
+
+-- ============================================================================
+-- Migration 2 — advanced groups, media chat, voice calls, story privacy
+-- All statements are idempotent (IF NOT EXISTS / DROP NOT NULL) and safe to
+-- re-run via `npm run migrate`.
+-- ============================================================================
+
+-- ---------------------------------------------------------------- groups
+-- A cryptographically unique token powers the invite link + QR code
+-- (the short `invite_code` stays for manual entry).
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS invite_token TEXT;
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS invite_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_invite_token ON groups (invite_token);
+
+-- --------------------------------------------------------------- messages
+-- Image / voice-note attachments (data URL) on group chat messages.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(16);   -- 'image' | 'audio'
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_data TEXT;          -- data URL
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_mime TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS duration_seconds NUMERIC(7, 2); -- voice-note length
+
+-- Same attachments on direct messages.
+ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(16);
+ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS attachment_data TEXT;
+ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS attachment_mime TEXT;
+ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE direct_messages ADD COLUMN IF NOT EXISTS duration_seconds NUMERIC(7, 2);
+
+-- ---------------------------------------------------------------- stories
+-- Richer stories: text posts, videos, privacy tiers and view-once.
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS media_type VARCHAR(16) NOT NULL DEFAULT 'image'; -- image|video|text
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_content TEXT;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS privacy VARCHAR(16) NOT NULL DEFAULT 'group';    -- group|global|selected
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS view_once BOOLEAN NOT NULL DEFAULT FALSE;
+-- Text-only stories have no media.
+ALTER TABLE stories ALTER COLUMN media DROP NOT NULL;
+
+-- "Selected people" audience for a story.
+CREATE TABLE IF NOT EXISTS story_audience (
+  story_id INTEGER NOT NULL REFERENCES stories (id) ON DELETE CASCADE,
+  user_id  TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  PRIMARY KEY (story_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_story_audience_user ON story_audience (user_id);
+
+-- Who has viewed a story — drives the view-once rule.
+CREATE TABLE IF NOT EXISTS story_views (
+  story_id  INTEGER NOT NULL REFERENCES stories (id) ON DELETE CASCADE,
+  viewer_id TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (story_id, viewer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_story_views_story ON story_views (story_id);

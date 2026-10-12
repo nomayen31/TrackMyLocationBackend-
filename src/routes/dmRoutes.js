@@ -2,17 +2,23 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
+const { normalizeAttachment } = require('../attachments');
 
 // Every route in this file requires a valid session.
 router.use(authMiddleware);
 
+// Attachment columns shared by every DM query.
+const DM_COLUMNS = `
+  dm.id, dm.from_user, dm.to_user, dm.message, dm.created_at, dm.read_at,
+  dm.attachment_type, dm.attachment_data, dm.attachment_mime,
+  dm.attachment_name, dm.duration_seconds
+`;
+
 // GET /api/dm  -> recent 1:1 conversations for the current user.
-// Returns one row per peer with the latest message preview.
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT DISTINCT ON (peer) peer,
-              dm.id, dm.message, dm.from_user, dm.to_user, dm.created_at, dm.read_at,
+      `SELECT DISTINCT ON (peer) peer, ${DM_COLUMNS},
               u.name AS peer_name,
               COALESCE(u.image, u."avatarUrl") AS peer_avatar
        FROM (
@@ -33,14 +39,13 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/dm/:otherUserId  -> full conversation history (oldest first).
-// Marks messages sent to you by that peer as read.
 router.get('/:otherUserId', async (req, res) => {
   try {
     const me = req.user.id;
     const other = req.params.otherUserId;
 
     const result = await pool.query(
-      `SELECT dm.id, dm.from_user, dm.to_user, dm.message, dm.created_at, dm.read_at,
+      `SELECT ${DM_COLUMNS},
               u.name AS from_name,
               COALESCE(u.image, u."avatarUrl") AS from_avatar
        FROM direct_messages dm
@@ -65,24 +70,39 @@ router.get('/:otherUserId', async (req, res) => {
   }
 });
 
-// POST /api/dm  -> REST fallback for sending a direct message  { toUserId, message }
+// POST /api/dm  -> REST fallback for sending a direct message
+// body: { toUserId, message?, attachment? }
 router.post('/', async (req, res) => {
   try {
-    const { toUserId, message } = req.body || {};
+    const { toUserId, message, attachment } = req.body || {};
     const text = String(message ?? '').trim();
+    const att = normalizeAttachment(attachment);
 
-    if (!toUserId || !text) {
-      return res.status(400).json({ error: 'toUserId and message are required' });
+    if (!toUserId || (!text && !att)) {
+      return res.status(400).json({ error: 'toUserId and a message or attachment are required' });
     }
     if (toUserId === req.user.id) {
       return res.status(400).json({ error: 'You cannot message yourself' });
     }
 
     const result = await pool.query(
-      `INSERT INTO direct_messages (from_user, to_user, message)
-       VALUES ($1, $2, $3)
-       RETURNING id, from_user, to_user, message, created_at, read_at`,
-      [req.user.id, toUserId, text.slice(0, 2000)]
+      `INSERT INTO direct_messages
+         (from_user, to_user, message, attachment_type, attachment_data,
+          attachment_mime, attachment_name, duration_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, from_user, to_user, message, created_at, read_at,
+                 attachment_type, attachment_data, attachment_mime,
+                 attachment_name, duration_seconds`,
+      [
+        req.user.id,
+        toUserId,
+        text,
+        att?.type || null,
+        att?.data || null,
+        att?.mime || null,
+        att?.name || null,
+        att?.duration || null,
+      ]
     );
 
     const dm = {
@@ -91,7 +111,6 @@ router.post('/', async (req, res) => {
       fromAvatar: req.user.image || req.user.avatarUrl || null,
     };
 
-    // Live-deliver to the recipient and the sender's other tabs.
     const io = req.app.get('io');
     if (io) {
       io.to(`user_${toUserId}`).emit('receive-dm', dm);

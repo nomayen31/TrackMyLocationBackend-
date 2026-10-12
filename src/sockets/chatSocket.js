@@ -1,22 +1,40 @@
 const pool = require('../config/db');
+const { normalizeAttachment } = require('../attachments');
 
 module.exports = function chatSocket(io, socket) {
-  // Listen for new messages from users.
+  // New group message — text and/or a media attachment (image, voice note).
   // The sender is taken from the verified session, never from the client.
-  socket.on('send-message', async ({ groupId, message }) => {
+  socket.on('send-message', async ({ groupId, message, attachment } = {}) => {
     try {
-      if (!groupId || !message) return;
+      if (!groupId) return;
 
-      // 1. Save message to PostgreSQL Database
+      const text = String(message || '').trim();
+      const att = normalizeAttachment(attachment);
+      if (!text && !att) return; // nothing to send
+
       const result = await pool.query(
-        `INSERT INTO messages (group_id, user_id, message) VALUES ($1, $2, $3) RETURNING *`,
-        [groupId, socket.user.id, message]
+        `INSERT INTO messages
+           (group_id, user_id, message, attachment_type, attachment_data,
+            attachment_mime, attachment_name, duration_seconds)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          groupId,
+          socket.user.id,
+          text,
+          att?.type || null,
+          att?.data || null,
+          att?.mime || null,
+          att?.name || null,
+          att?.duration || null,
+        ]
       );
 
-      // 2. Broadcast the message to all members in the group room.
-      //    `user_name` is attached so the client can label the bubble without
-      //    a second round-trip.
-      const newMessage = { ...result.rows[0], user_name: socket.user.name };
+      const newMessage = {
+        ...result.rows[0],
+        user_name: socket.user.name,
+        user_avatar: socket.user.image || socket.user.avatarUrl || null,
+      };
       io.to(`group_${groupId}`).emit('receive-message', newMessage);
     } catch (err) {
       console.error('Error saving chat message:', err);

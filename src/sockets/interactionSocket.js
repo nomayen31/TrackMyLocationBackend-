@@ -1,9 +1,9 @@
 /**
  * interactionSocket — realtime social actions between group members.
  *
- *   send-dm      -> persist a 1:1 direct message            (direct_messages)
- *   vibrate-user -> make a member's phone buzz              (Vibration API)
- *   ring-user    -> play a ringtone on a member's device    (Web Audio API)
+ *   send-dm      -> persist a 1:1 direct message           (direct_messages)
+ *   vibrate-user -> make a member's phone buzz             (Vibration API)
+ *   ring-user    -> play a ringtone on a member's device   (Web Audio API)
  *   stop-ring    -> cancel a ringtone
  *
  * Every event targets the recipient's personal room (`user_<id>`), which is
@@ -15,6 +15,7 @@
  * poke actions from being used as a spam weapon.
  */
 const pool = require('../config/db');
+const { normalizeAttachment } = require('../attachments');
 
 const THROTTLE_MS = 2500;
 
@@ -46,9 +47,10 @@ module.exports = function interactionSocket(io, socket) {
     try {
       const { toUserId, groupId } = payload || {};
       const text = String(payload?.message ?? '').trim();
+      const att = normalizeAttachment(payload?.attachment);
 
-      if (!toUserId || !text) {
-        if (typeof ack === 'function') ack({ error: 'toUserId and message are required' });
+      if (!toUserId || (!text && !att)) {
+        if (typeof ack === 'function') ack({ error: 'toUserId and a message or attachment are required' });
         return;
       }
       if (toUserId === me.id) {
@@ -62,10 +64,23 @@ module.exports = function interactionSocket(io, socket) {
       }
 
       const result = await pool.query(
-        `INSERT INTO direct_messages (from_user, to_user, message)
-         VALUES ($1, $2, $3)
-         RETURNING id, from_user, to_user, message, created_at, read_at`,
-        [me.id, toUserId, text.slice(0, 2000)]
+        `INSERT INTO direct_messages
+           (from_user, to_user, message, attachment_type, attachment_data,
+            attachment_mime, attachment_name, duration_seconds)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, from_user, to_user, message, created_at, read_at,
+                   attachment_type, attachment_data, attachment_mime,
+                   attachment_name, duration_seconds`,
+        [
+          me.id,
+          toUserId,
+          text,
+          att?.type || null,
+          att?.data || null,
+          att?.mime || null,
+          att?.name || null,
+          att?.duration || null,
+        ]
       );
 
       const dm = {
