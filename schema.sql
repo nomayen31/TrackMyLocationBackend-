@@ -205,3 +205,27 @@ CREATE TABLE IF NOT EXISTS group_safe_zones (
   center_lng    DOUBLE PRECISION,
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================================
+-- Migration 4 — member profiles + real-world expenses
+-- ============================================================================
+
+-- Profile extras on the Better Auth user table.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS social TEXT;
+
+-- Richer expenses: category, split strategy, currency and a note.
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category VARCHAR(32) NOT NULL DEFAULT 'other';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS split_type VARCHAR(16) NOT NULL DEFAULT 'equal';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NOT NULL DEFAULT 'USD';
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT;
+
+-- Per-person share of an expense (enables custom / payer-only splitting).
+CREATE TABLE IF NOT EXISTS expense_shares (
+  expense_id   INTEGER NOT NULL REFERENCES expenses (id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+  share_amount NUMERIC(12, 2) NOT NULL,
+  PRIMARY KEY (expense_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_expense_shares_user ON expense_shares (user_id);

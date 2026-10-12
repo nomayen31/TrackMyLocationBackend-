@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth } = require('../auth');
 const { fromNodeHeaders } = require('better-auth/node');
 const authMiddleware = require('../middleware/authMiddleware');
+const pool = require('../config/db');
 
 /**
  * Copy the headers (notably `set-cookie`) produced by a Better Auth server
@@ -38,10 +39,10 @@ function handleAuthError(res, err) {
   return res.status(500).json({ error: 'Internal server error' });
 }
 
-// POST /api/auth/signup  ->  { name, email, password }
+// POST /api/auth/signup  ->  { name, email, password, image?, phone? }
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body || {};
+    const { name, email, password, image, phone } = req.body || {};
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email and password are required' });
@@ -53,6 +54,38 @@ router.post('/signup', async (req, res) => {
       returnHeaders: true,
       returnStatus: true,
     });
+
+    // Attach the optional profile photo / phone the signup form collected.
+    const userId = result?.response?.user?.id;
+    if (userId && (image || phone)) {
+      try {
+        const photo =
+          image && /^data:image\//i.test(String(image)) && String(image).length <= 2 * 1024 * 1024
+            ? String(image)
+            : null;
+        const tel = phone ? String(phone).trim().slice(0, 32) : null;
+
+        await pool.query(
+          `UPDATE "user"
+             SET image      = COALESCE($1, image),
+                 "avatarUrl" = COALESCE($1, "avatarUrl"),
+                 phone      = COALESCE($2, phone)
+           WHERE id = $3`,
+          [photo, tel, userId]
+        );
+
+        const fresh = await pool.query(
+          'SELECT id, name, email, image, "avatarUrl", phone, social FROM "user" WHERE id = $1',
+          [userId]
+        );
+        if (fresh.rows.length > 0 && result.response.user) {
+          result.response.user = { ...result.response.user, ...fresh.rows[0] };
+        }
+      } catch (profileErr) {
+        // Never fail the signup because of an optional profile field.
+        console.error('Signup profile enrichment failed:', profileErr.message);
+      }
+    }
 
     return sendAuthResult(res, result);
   } catch (err) {

@@ -67,15 +67,16 @@ Authenticated via the Better Auth session cookie (`src/middleware/socketAuth.js`
 
 **Safety / admin:** `set-safe-zone`, `disable-safe-zone`, `admin-broadcast`
 
-**WebRTC voice calls:** `call:invite`, `call:accept`, `call:reject`, `call:offer`,
-`call:answer`, `call:ice`, `call:end`
+**WebRTC voice calls (1-to-1):** `call-user` (invite + SDP offer),
+`accept-call` (SDP answer), `reject-call`, `ice-candidate`, `hang-up`
+(legacy `call:*` names are still accepted as aliases)
 
 **Server → Client:** `user-moved`, `receive-message`, `receive-dm`, `vibrate`, `ring`,
 `ring-stopped`, `story-updated`, `story-deleted`, `group-updated`,
 `removed-from-group`, `sos`, `sos-sent`, `sos-cleared`, `safe-zone-updated`,
 `boundary-breach-alert`, `boundary-restored`, `admin-broadcast-message`,
-`call:incoming`, `call:accepted`, `call:rejected`, `call:offer`, `call:answer`,
-`call:ice`, `call:ended`
+`expense-updated`, `member-profile-updated`, `incoming-call`, `call-accepted`,
+`call-rejected`, `ice-candidate`, `call-ended`
 
 ## Project layout
 ```

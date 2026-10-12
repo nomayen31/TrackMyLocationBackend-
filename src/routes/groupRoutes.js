@@ -274,7 +274,7 @@ router.get('/:groupId', async (req, res) => {
     }
 
     const membersResult = await pool.query(
-      `SELECT u.id, u.name, u.email, u.image, u."avatarUrl", gm.role, gm.joined_at
+      `SELECT u.id, u.name, u.email, u.image, u."avatarUrl", u.phone, u.social, gm.role, gm.joined_at
        FROM group_members gm
        JOIN "user" u ON u.id = gm.user_id
        WHERE gm.group_id = $1
@@ -300,7 +300,7 @@ router.get('/:groupId/members', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.image, u."avatarUrl", gm.role, gm.joined_at
+      `SELECT u.id, u.name, u.email, u.image, u."avatarUrl", u.phone, u.social, gm.role, gm.joined_at
        FROM group_members gm
        JOIN "user" u ON u.id = gm.user_id
        WHERE gm.group_id = $1
