@@ -127,29 +127,28 @@ connections and a single stable process. **Vercel / Netlify functions are not
 suitable** — the API boots, but Socket.IO features (chat, live locations, voice
 signalling, presence) will not work there.
 
-Recommended: **Render** or **Railway** (a `Dockerfile`, `render.yaml` and
-`railway.json` are included).
+Recommended: **Render** — this repo ships a `render.yaml` blueprint (Node
+runtime). A `Dockerfile` and `railway.json` are included as alternatives.
 
 ### 1. Deploy the API (Render)
 
-1. Push this repo to GitHub (already done).
-2. **Option A — Blueprint (uses the Dockerfile):** Render Dashboard →
-   **New → Blueprint** → pick this repo. Render reads `render.yaml`.
-   **Option B — plain Web Service (Node runtime):** New → **Web Service**, pick
-   the repo, and leave the start command as the default. `index.js` exists
-   specifically so the default `node index.js` boots the server, and
-   `npm start` (`node src/server.js`) is set as the explicit alternative.
-   If you prefer to be explicit, set **Start Command** to `node src/server.js`.
-3. Fill in the env vars below.
-4. Set `BETTER_AUTH_URL` to the service's own URL and `CLIENT_URL` to the
-   deployed frontend origin, then redeploy so cookies/CORS match.
+**Blueprint (recommended):** Render Dashboard → **New → Blueprint** → pick this
+repo. Render reads `render.yaml`, creates the web service, and prompts for the
+secrets below. After the first deploy, set `BETTER_AUTH_URL` to the service's own
+URL and `CLIENT_URL` to the frontend URL, then **redeploy**.
+
+**Manual web service:** Runtime **Node**, Build `npm install`,
+Start `node src/server.js`, Health check `/health`. (`index.js` also exists so
+the default `node index.js` works.)
 
 > Build command: `npm install` (default). The `npm audit` summary during build is
 > informational — **do not** run `npm audit fix --force`, as it applies breaking
 > major-version upgrades to Express/Better Auth and will break the app.
 
-Railway: **New Project → Deploy from GitHub**; it detects `Dockerfile` or the
-`start` script. Inject the same variables below and generate a public domain.
+The React app deploys as a Render **static site** from the frontend repo's
+`render.yaml`. Set the API's `CLIENT_URL` to that static site's URL (e.g.
+`https://trackmylocation-app.onrender.com`) and redeploy the API so CORS and the
+session cookie line up.
 
 ### 2. Environment variables (set these on the host)
 

@@ -1,42 +1,70 @@
-# Render Blueprint — deploys the Trip Tracker backend as a persistent web
-# service (required for Socket.IO / WebSockets).
+# ============================================================================
+# Render Blueprint — Trip Tracker API (Express + Socket.IO + LiveKit signalling)
+# ============================================================================
+# This is a LONG-RUNNING server, not serverless: it holds WebSocket
+# connections and keeps in-memory voice presence. Render web services are a
+# good fit; serverless platforms are not.
 #
-# Usage: Render Dashboard -> New -> Blueprint -> select this repo.
-# Values marked `sync: false` are secrets you must fill in the dashboard.
+# HOW TO DEPLOY
+#   1. Push this repo to GitHub.
+#   2. Render Dashboard -> New -> Blueprint -> pick this repo.
+#   3. Render prompts for every variable marked `sync: false` — fill them in.
+#   4. After the first deploy, copy the service URL into BETTER_AUTH_URL.
+#   5. Set CLIENT_URL to your frontend URL (see the frontend repo's render.yaml).
+#
+# NOTE: `runtime: node` is used (not Docker) so the build is fast and easy to
+# debug. A Dockerfile is also included if you prefer `runtime: docker`.
+# ============================================================================
+
 services:
   - type: web
-    name: trackmylocation-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    name: trackmylocationbackend
+    runtime: node
     plan: free
-    # Pick the region closest to your users (singapore is nearest to South Asia).
-    region: singapore
-    healthCheckPath: /health
+    region: singapore # nearest to South Asia; change if you prefer
+    branch: main
     autoDeploy: true
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /health
     envVars:
+      # ---- non-secret, safe to commit ----
       - key: NODE_ENV
         value: production
 
-      # --- secrets: set these in the Render dashboard ---
-      # Neon PostgreSQL connection string (include ?sslmode=require)
+      # ---- secrets: Render asks for these on first deploy ----
+      # Neon PostgreSQL connection string. Keep `?sslmode=require`.
       - key: DATABASE_URL
         sync: false
-      # A long random string, e.g. `openssl rand -hex 32`
+
+      # Session signing secret. Generate with: openssl rand -hex 32
       - key: BETTER_AUTH_SECRET
         sync: false
-      # This service's own public URL, e.g. https://trackmylocation-api.onrender.com
+
+      # This service's OWN public URL once deployed, e.g.
+      # https://trackmylocationbackend.onrender.com
       - key: BETTER_AUTH_URL
         sync: false
-      # The deployed frontend origin, e.g. https://your-app.vercel.app
+
+      # The deployed FRONTEND origin — required, or the browser will block
+      # every API call with a CORS error, e.g.
+      # https://trackmylocation-app.onrender.com
       - key: CLIENT_URL
         sync: false
-      # Optional extra allowed origins (comma separated), e.g. Vercel previews
+
+      # Optional extra allowed origins (comma separated) — e.g. a custom domain
+      # or a Render preview URL.
       - key: CORS_ORIGINS
         sync: false
-      # LiveKit (group voice rooms)
+
+      # ---- LiveKit (Discord-style group voice rooms) ----
       - key: LIVEKIT_URL
-        sync: false
+        value: wss://trip-tracker-mgj9em5q.livekit.cloud
       - key: LIVEKIT_API_KEY
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
+
+# PORT is injected by Render automatically — never set it yourself.
+# Migrations: run once from your machine against the production database:
+#   DATABASE_URL="<prod connection string>" node scripts/migrate.js
