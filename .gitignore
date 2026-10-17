@@ -27,3 +27,8 @@ _*.txt
 # LAN HTTPS certificates — never commit the private key
 certs/
 *.pem
+
+# Local test artifacts
+a.txt
+b.txt
+cookies.txt
