@@ -6,7 +6,9 @@ const { normalizeIp, subnetOf } = require('../lan/network');
  * Socket.IO auth middleware.
  *
  * LAN mode (hotspot): verifies the signed LAN token issued by POST /api/lan/join.
- * Cloud mode: resolves the Better Auth session cookie, exactly as before.
+ * Cloud mode: resolves the Better Auth session from the cookie, or from a
+ * bearer token passed in the Socket.IO auth payload (works when the browser
+ * blocks cross-site cookies).
  *
  * Better Auth is required lazily so that an offline Pi never initialises the
  * cloud auth/database stack.
@@ -37,6 +39,15 @@ module.exports = async function socketAuth(socket, next) {
     const { fromNodeHeaders } = await import('better-auth/node');
 
     const headers = fromNodeHeaders(socket.handshake.headers);
+
+    // A browser cannot attach an Authorization header to the WebSocket
+    // handshake, so the client passes its bearer token in the Socket.IO auth
+    // payload instead. Cookies keep working for same-site deployments.
+    const handshakeToken = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (handshakeToken && !headers.get('authorization')) {
+      headers.set('authorization', `Bearer ${handshakeToken}`);
+    }
+
     const session = await auth.api.getSession({ headers });
 
     if (!session) {

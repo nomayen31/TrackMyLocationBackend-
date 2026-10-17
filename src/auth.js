@@ -1,4 +1,5 @@
 const { betterAuth } = require('better-auth');
+const { bearer } = require('better-auth/plugins');
 const pool = require('./config/db');
 const { isAllowedOrigin } = require('./config/origins');
 
@@ -52,6 +53,16 @@ const auth = betterAuth({
       path: '/',
     },
   },
+  // Bearer tokens make auth work even when the browser refuses to store or send
+  // the session cookie. That happens whenever the frontend and the API are on
+  // different *sites* — and `vercel.app` and `onrender.com` are both in the
+  // Public Suffix List, so `*.vercel.app -> *.onrender.com` is always cross-site.
+  // Safari (ITP), Firefox (Total Cookie Protection) and Brave block such cookies
+  // by default: sign-in returns 200, the next request has no cookie, and the app
+  // bounces back to the sign-in page. The plugin accepts
+  // `Authorization: Bearer <token>` (the `token` returned by sign-up/sign-in),
+  // and the cookie still works as a fallback for same-site deployments.
+  plugins: [bearer()],
   emailAndPassword: {
     enabled: true,
     // Keep sign-ups simple for local development (no email verification flow yet)

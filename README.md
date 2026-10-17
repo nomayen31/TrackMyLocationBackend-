@@ -190,8 +190,10 @@ node -e "console.log(require('web-push').generateVAPIDKeys())"             # VAP
 
 ## 8. REST API
 
-All routes below require a valid session cookie except `/health`, `/api/lan/info`
-and `POST /api/lan/join`. Errors are JSON: `{ "error": "message" }`.
+All routes below require a valid session — sent as the Better Auth session
+cookie **or** as `Authorization: Bearer <token>` (the `token` returned by
+`/api/auth/sign-up/email` and `/api/auth/sign-in/email`) — except `/health`,
+`/api/lan/info` and `POST /api/lan/join`. Errors are JSON: `{ "error": "message" }`.
 
 ### Auth — `/api/auth`
 | Method | Path | Notes |
@@ -377,10 +379,14 @@ Full setup (hostapd, dnsmasq, TLS, systemd, capacity tuning):
 
 ## 12. Security model
 
-- **Sessions**: Better Auth cookie; validated per request (`authMiddleware`) and
-  per socket (`socketAuth`). The frontend and API are separate sites in
-  production, so cookies are issued `SameSite=None; Secure` when
-  `NODE_ENV=production`.
+- **Sessions**: Better Auth session, accepted either as the session cookie or as
+  a bearer token (`Authorization: Bearer …`, and the Socket.IO handshake `auth`
+  payload), validated per request (`authMiddleware`) and per socket
+  (`socketAuth`). Bearer tokens matter because `vercel.app` and `onrender.com`
+  are both in the Public Suffix List — the frontend and API are therefore always
+  cross-site, and Safari / Firefox / Brave block cross-site cookies by default.
+  The cookie is still issued (`SameSite=None; Secure` when the deployment is
+  https) and is used automatically wherever it works.
 - **Authorization is always server-side**: admin-only actions re-check
   `group_members.role`; private-room access and invitations are validated in the
   services, never trusted from the client.
