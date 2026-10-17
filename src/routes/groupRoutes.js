@@ -7,8 +7,12 @@ const authMiddleware = require('../middleware/authMiddleware');
 // Every route in this file requires a valid session.
 router.use(authMiddleware);
 
-// Base URL of the frontend, used to build invite links / QR targets.
-const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
+const { clientBase } = require('../config/clientUrl');
+
+/** Build the public invite link that a QR code should encode. */
+function inviteLink(token, req) {
+  return `${clientBase(req)}/join/${token}`;
+}
 
 /** Returns { role } if the user belongs to the group, otherwise null. */
 async function getMembership(groupId, userId) {
@@ -46,8 +50,8 @@ function generateInviteToken() {
 }
 
 /** Build the public invite link that a QR code should encode. */
-function inviteLink(token) {
-  return `${CLIENT_URL}/join/${token}`;
+function inviteLink(token, req) {
+  return `${clientBase(req)}/join/${token}`;
 }
 
 /** Attach the socket server (if available) so REST changes can fan out. */
@@ -89,7 +93,7 @@ async function createGroupHandler(req, res) {
     );
 
     await client.query('COMMIT');
-    res.status(201).json({ group: { ...group, invite_link: inviteLink(inviteToken) } });
+    res.status(201).json({ group: { ...group, invite_link: inviteLink(inviteToken, req) } });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Create group error:', err);
@@ -248,7 +252,7 @@ router.get('/:groupId/invite', async (req, res) => {
     }
 
     const { invite_code, invite_token } = result.rows[0];
-    res.json({ inviteCode: invite_code, inviteToken: invite_token, inviteLink: inviteLink(invite_token) });
+    res.json({ inviteCode: invite_code, inviteToken: invite_token, inviteLink: inviteLink(invite_token, req) });
   } catch (err) {
     console.error('Get invite error:', err);
     res.status(500).json({ error: 'Failed to build invite' });

@@ -61,6 +61,7 @@ if (!LAN_MODE) {
   const safeZoneRoutes = require('./routes/safeZoneRoutes');
   const profileRoutes = require('./routes/profileRoutes');
   const voiceRoutes = require('./routes/voiceRoutes');
+  const pushRoutes = require('./routes/pushRoutes');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/groups', groupRoutes);
@@ -71,6 +72,7 @@ if (!LAN_MODE) {
   app.use('/api/safezone', safeZoneRoutes);
   app.use('/api/profile', profileRoutes);
   app.use('/api/voice', voiceRoutes);
+  app.use('/api/push', pushRoutes);
 
   // Better Auth's own endpoints
   app.all('/api/auth/*splat', toNodeHandler(auth.handler));

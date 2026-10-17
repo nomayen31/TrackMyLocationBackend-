@@ -21,6 +21,7 @@
  *   either: `hang-up` -> `call-ended`
  */
 const pool = require('../config/db');
+const { sendToUser } = require('../notifications/push');
 
 /** True when `userId` belongs to `groupId` (skipped when no group is given). */
 async function isMember(groupId, userId) {
@@ -53,6 +54,17 @@ module.exports = function callSocket(io, socket) {
         fromAvatar: me.image || me.avatarUrl || null,
         groupId: groupId ?? null,
       });
+
+      // Also ring devices with no open tab (Web Push). Fire-and-forget so a
+      // push failure never blocks the live call path.
+      sendToUser(toUserId, {
+        type: 'incoming-call',
+        title: `Incoming call from ${me.name}`,
+        body: 'Open Trip Tracker to answer',
+        url: '/',
+        tag: `call-${callId}`,
+        callId,
+      }).catch(() => {});
     } catch (err) {
       console.error('call-user error:', err.message);
     }

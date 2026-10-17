@@ -119,6 +119,27 @@ test/               node:test suites (presence + services)
 schema.sql   seed.js   scripts/migrate.js
 ```
 
+## Calls & push notifications
+
+1-to-1 calls ring through Socket.IO while a tab is open, and through **Web Push**
+when the tab is closed:
+
+| Env | Purpose |
+| --- | --- |
+| `VAPID_PUBLIC_KEY` | shared with the browser |
+| `VAPID_PRIVATE_KEY` | **server-only** signing key |
+| `VAPID_SUBJECT` | `mailto:` contact for push services |
+
+Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
+Subscriptions live in `push_subscriptions`; expired endpoints are pruned when a
+send returns 404/410.
+
+- `GET /api/push/public-key` · `POST/DELETE /api/push/subscribe` · `POST /api/push/test`
+- `POST /api/call-user` (socket `call-user`) also fires a push to the recipient.
+
+> Web Push needs **HTTPS**. On iOS 16.4+ the app must be **added to the Home
+> Screen** for push to work (Safari limitation).
+
 ## Hotspot (LAN) mode — offline group voice
 
 Set `LAN_MODE=true` to run the backend as an **offline Raspberry Pi hotspot
