@@ -149,6 +149,7 @@ Copy `.env.example`. **`.env` is gitignored — never commit it.**
 | `BETTER_AUTH_SECRET` | **yes** | Session signing secret (`openssl rand -hex 32`) |
 | `BETTER_AUTH_URL` | **yes** (prod) | This API's public URL |
 | `CLIENT_URL` | **yes** (prod) | Frontend origin — CORS, cookies, invite links |
+| `COOKIE_SAMESITE` | no | Force `none` (cross-site, Secure) or `lax`. Auto-derived from the https URLs otherwise. |
 | `CORS_ORIGINS` | no | Extra allowed origins (comma separated) |
 | `LIVEKIT_URL` | voice | `wss://…livekit.cloud` |
 | `LIVEKIT_API_KEY` | voice | LiveKit API key |
