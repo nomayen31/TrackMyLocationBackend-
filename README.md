@@ -119,6 +119,28 @@ test/               node:test suites (presence + services)
 schema.sql   seed.js   scripts/migrate.js
 ```
 
+## Hotspot (LAN) mode — offline group voice
+
+Set `LAN_MODE=true` to run the backend as an **offline Raspberry Pi hotspot
+server**: no cloud auth/database, subnet-based discovery of everyone on the Wi-Fi,
+and **group voice over a WebRTC mesh** signalled through Socket.IO (audio goes
+device-to-device; STUN/TURN are not needed on a LAN).
+
+```bash
+LAN_MODE=true PORT=3000 \
+FRONTEND_DIST=/path/to/Frontend/dist \
+LAN_HTTPS_CERT=/etc/triptracker/cert.pem LAN_HTTPS_KEY=/etc/triptracker/key.pem \
+node src/server.js
+```
+
+It serves the built React app from the same origin (no CORS, no internet needed)
+and exposes `/api/lan/*`. Cloud mode is untouched — omit the flag and everything
+behaves exactly as before.
+
+**HTTPS is required for voice**: browsers block `getUserMedia` on non-localhost
+HTTP. Full step-by-step (hostapd/dnsmasq, self-signed cert with a SAN, systemd
+unit, capacity tuning) is in **[docs/HOTSPOT_SETUP.md](docs/HOTSPOT_SETUP.md)**.
+
 ## Deployment
 
 This backend is a **long-running Express + Socket.IO server** and keeps voice

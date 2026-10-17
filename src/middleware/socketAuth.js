@@ -1,12 +1,40 @@
-const { auth } = require('../auth');
-const { fromNodeHeaders } = require('better-auth/node');
+const { LAN_MODE } = require('../lan/config');
+const { verifyToken } = require('../lan/token');
+const { normalizeIp, subnetOf } = require('../lan/network');
 
 /**
- * Socket.IO middleware that resolves the current user from the
- * Better Auth session cookie and attaches it to `socket.user`.
+ * Socket.IO auth middleware.
+ *
+ * LAN mode (hotspot): verifies the signed LAN token issued by POST /api/lan/join.
+ * Cloud mode: resolves the Better Auth session cookie, exactly as before.
+ *
+ * Better Auth is required lazily so that an offline Pi never initialises the
+ * cloud auth/database stack.
  */
 module.exports = async function socketAuth(socket, next) {
   try {
+    if (LAN_MODE) {
+      const token = socket.handshake.auth?.lanToken || socket.handshake.query?.lanToken;
+      const claims = verifyToken(token);
+      if (!claims) return next(new Error('Unauthorized'));
+
+      socket.user = {
+        id: `lan_${claims.deviceId}`,
+        name: claims.name,
+        lan: true,
+        deviceId: claims.deviceId,
+      };
+      socket.lan = {
+        deviceId: claims.deviceId,
+        ip: normalizeIp(socket.handshake.address),
+        network: subnetOf(socket.handshake.address),
+      };
+      return next();
+    }
+
+    const { auth } = require('../auth');
+    const { fromNodeHeaders } = require('better-auth/node');
+
     const headers = fromNodeHeaders(socket.handshake.headers);
     const session = await auth.api.getSession({ headers });
 
