@@ -23,3 +23,7 @@ Thumbs.db
 
 # Local scratch/log files
 _*.txt
+
+# LAN HTTPS certificates — never commit the private key
+certs/
+*.pem

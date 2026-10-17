@@ -99,8 +99,62 @@ No `npm run migrate` is needed — LAN mode never touches PostgreSQL.
 
 ## 3. HTTPS (required for the microphone)
 
-Create a self-signed certificate whose **Subject Alternative Name includes the
-Pi's IP** (browsers reject a cert that doesn't match the address you typed):
+**Why it's needed:** browsers only expose `getUserMedia` on a *secure context*.
+`http://localhost` counts as secure, but `http://192.168.4.1` does **not** — so on
+the hotspot every phone would refuse the mic. TLS fixes that.
+
+**How it works here:** the Pi serves the app itself over HTTPS with a
+**self-signed certificate**. There is no internet on the hotspot, so
+Let's Encrypt is not an option. The browser validates the certificate against
+the address bar: it must list the exact IP/DNS you typed, or it refuses to treat
+the origin as secure. That list is the **Subject Alternative Name (SAN)**.
+
+Generate one (works on Windows/macOS/Linux — no openssl required):
+
+```bash
+cd Backend
+npm run cert -- --ip 192.168.4.1        # add --ip for each address you use
+# or simply:
+node scripts/make-cert.js
+```
+
+It auto-detects your machine's LAN IPs and adds `127.0.0.1`, `192.168.4.1`,
+`localhost`, `pi.wifi`, `triptracker.local`. Output:
+
+```
+certs/cert.pem   certs/key.pem          (both gitignored)
+```
+
+Then start the server pointing at them:
+
+```bash
+LAN_MODE=true PORT=3000 \
+LAN_HTTPS_CERT=./certs/cert.pem \
+LAN_HTTPS_KEY=./certs/key.pem \
+node src/server.js
+```
+
+Look for `🔒 HTTPS enabled for LAN mode` in the log. Verify from another device:
+
+```bash
+curl -k https://192.168.4.1:3000/health
+# {"ok":true,"mode":"lan",...}
+```
+
+> Re-run `npm run cert` whenever the Pi's IP changes — a certificate whose SAN
+> doesn't match the URL is rejected even if you installed it.
+
+**Trust it on each phone** (otherwise the mic stays blocked):
+
+- **Android**: Settings → Security → Encryption & credentials → Install a
+  certificate → *CA certificate* → pick `cert.pem` (rename to `cert.crt`).
+- **iOS**: open/airdrop the `.pem`, install the profile, then
+  Settings → General → About → Certificate Trust Settings → enable full trust.
+- **Desktop**: import into the OS trust store, or accept the warning (Chrome may
+  still withhold the mic until the cert is trusted).
+
+<details>
+<summary>Alternative: openssl (preinstalled on Raspberry Pi OS)</summary>
 
 ```bash
 sudo mkdir -p /etc/triptracker
@@ -108,21 +162,10 @@ sudo openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
   -keyout /etc/triptracker/key.pem \
   -out  /etc/triptracker/cert.pem \
   -subj "/CN=192.168.4.1" \
-  -addext "subjectAltName=IP:192.168.4.1,DNS:pi.wifi"
+  -addext "subjectAltName=IP:192.168.4.1,DNS:pi.wifi,DNS:localhost"
 sudo chmod 600 /etc/triptracker/key.pem
 ```
-
-**Trust it on each phone**, or the mic stays blocked:
-
-- **Android**: Settings → Security → Encryption & credentials → Install a
-  certificate → *CA certificate* → pick `cert.pem` (rename it `cert.crt`).
-- **iOS**: AirDrop/email the `.pem`, install the profile, then
-  Settings → General → About → Certificate Trust Settings → enable full trust.
-- **Desktop**: import into the OS trust store, or accept the warning (Chrome may
-  still withhold the mic until the cert is trusted).
-
-> No internet means no Let's Encrypt. A locally trusted self-signed cert is the
-> correct approach for an offline hotspot.
+</details>
 
 ---
 
