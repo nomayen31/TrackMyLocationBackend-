@@ -12,15 +12,13 @@ const socketAuth = require('./middleware/socketAuth');
 
 const app = express();
 
-// Assigned in cloud mode, invoked once the Socket.IO server exists.
+/** Assigned while mounting cloud mode, invoked once Socket.IO exists. */
 let startCloudSockets = null;
 
-// Behind Render / the Pi's reverse proxy. Required for correct client IPs
-// (which LAN discovery relies on) and secure cookies.
+// Behind Render / the Pi's proxy. Required for correct client IPs and cookies.
 app.set('trust proxy', 1);
 
-// CORS for cookie-based auth. In LAN mode the app is served from this same
-// origin, so we reflect whatever origin the device used.
+// CORS for cookie-based auth. In LAN mode the app is same-origin, so reflect it.
 app.use(
   cors({
     origin: LAN_MODE ? true : corsOrigin,
@@ -45,13 +43,16 @@ app.get('/health', (req, res) => {
 /* ------------------------------------------------------------------------- */
 /* Cloud mode: the original application                                      */
 /* ------------------------------------------------------------------------- */
-if (!LAN_MODE) {
-  const { toNodeHandler } = require('better-auth/node');
+async function mountCloud() {
+  // Better Auth v1.7+ ships `better-auth/node` as an ES Module. A plain
+  // require() therefore fails with ERR_REQUIRE_ESM on runtimes where
+  // require(ESM) is unavailable (e.g. some serverless Node builds).
+  // A dynamic import() works everywhere.
+  const { toNodeHandler } = await import('better-auth/node');
   const { auth } = require('./auth');
   const swaggerUi = require('swagger-ui-express');
   const swaggerDocument = require('./swagger');
 
-  const handleSockets = require('./sockets/index');
   const chatRoutes = require('./routes/chatRoutes');
   const authRoutes = require('./routes/authRoutes');
   const groupRoutes = require('./routes/groupRoutes');
@@ -84,13 +85,13 @@ if (!LAN_MODE) {
     res.send('Trip Tracker Backend is running smoothly!');
   });
 
-  startCloudSockets = handleSockets;
+  startCloudSockets = require('./sockets/index');
 }
 
 /* ------------------------------------------------------------------------- */
 /* LAN / hotspot mode: offline identity, discovery, group voice              */
 /* ------------------------------------------------------------------------- */
-if (LAN_MODE) {
+function mountLan() {
   const lanRoutes = require('./routes/lanRoutes');
   app.use('/api/lan', lanRoutes);
 
@@ -98,7 +99,6 @@ if (LAN_MODE) {
   const dist = FRONTEND_DIST || path.resolve(__dirname, '../../Frontend/dist');
   if (fs.existsSync(dist)) {
     app.use(express.static(dist, { index: false }));
-    // SPA fallback for anything that isn't an API or socket request.
     app.use((req, res, next) => {
       if (req.method !== 'GET') return next();
       if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
@@ -114,55 +114,82 @@ if (LAN_MODE) {
 }
 
 /* ------------------------------------------------------------------------- */
+/* Startup                                                                   */
+/* ------------------------------------------------------------------------- */
 
-const server = (() => {
-  // Browsers only allow microphone access on secure origins. In LAN mode the
-  // app is served from http://192.168.x.x, which is NOT secure — so serving the
-  // Pi over HTTPS is required for voice. Provide a cert/key to enable it.
-  const certPath = process.env.LAN_HTTPS_CERT;
-  const keyPath = process.env.LAN_HTTPS_KEY;
-  if (LAN_MODE && certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-    const https = require('https');
-    console.log('🔒 HTTPS enabled for LAN mode');
-    return https.createServer(
-      { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) },
-      app
-    );
-  }
-  return http.createServer(app);
-})();
-const io = new Server(server, {
-  cors: {
-    origin: LAN_MODE ? true : corsOrigin,
-    credentials: true,
-  },
-  maxHttpBufferSize: 8 * 1024 * 1024,
-});
+/** Builds the HTTP(S) + Socket.IO servers. Returns { server, io }. */
+async function createServers() {
+  if (LAN_MODE) mountLan();
+  else await mountCloud();
 
-app.set('io', io);
-
-if (LAN_MODE) {
-  const lanSocket = require('./sockets/lanSocket');
-  io.use(socketAuth);
-  io.on('connection', (socket) => {
-    console.log(`📶 LAN device connected: ${socket.user?.name} (${socket.id})`);
-    lanSocket(io, socket);
-  });
-} else {
-  startCloudSockets(io);
-}
-
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  if (LAN_MODE) {
-    console.log(`🚀 Hotspot mode — "${LAN_NETWORK_NAME}" on port ${PORT} (max ${LAN_MAX_PEERS} in a voice call)`);
-    if (!process.env.LAN_HTTPS_CERT) {
-      console.warn(
-        '⚠️  Serving over HTTP. Browsers BLOCK microphone access on non-localhost HTTP, ' +
-          'so voice calls will not work until you enable HTTPS (set LAN_HTTPS_CERT / LAN_HTTPS_KEY).'
+  const server = (() => {
+    const certPath = process.env.LAN_HTTPS_CERT;
+    const keyPath = process.env.LAN_HTTPS_KEY;
+    if (LAN_MODE && certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      const https = require('https');
+      console.log('🔒 HTTPS enabled for LAN mode');
+      return https.createServer(
+        { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) },
+        app
       );
     }
+    return http.createServer(app);
+  })();
+
+  const io = new Server(server, {
+    cors: {
+      origin: LAN_MODE ? true : corsOrigin,
+      credentials: true,
+    },
+    maxHttpBufferSize: 8 * 1024 * 1024,
+  });
+
+  app.set('io', io);
+
+  if (LAN_MODE) {
+    const lanSocket = require('./sockets/lanSocket');
+    io.use(socketAuth);
+    io.on('connection', (socket) => {
+      console.log(`📶 LAN device connected: ${socket.user?.name} (${socket.id})`);
+      lanSocket(io, socket);
+    });
   } else {
-    console.log(`🚀 Server is running on port ${PORT}`);
+    startCloudSockets(io);
   }
+
+  return { server, io };
+}
+
+/** Full startup (mount routes, create servers, listen). */
+async function start() {
+  const { server } = await createServers();
+
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => {
+    if (LAN_MODE) {
+      console.log(`🚀 Hotspot mode — "${LAN_NETWORK_NAME}" on port ${PORT} (max ${LAN_MAX_PEERS} in a voice call)`);
+      if (!process.env.LAN_HTTPS_CERT) {
+        console.warn(
+          '⚠️  Serving over HTTP. Browsers BLOCK microphone access on non-localhost HTTP, ' +
+            'so voice calls will not work until you enable HTTPS (set LAN_HTTPS_CERT / LAN_HTTPS_KEY).'
+        );
+      }
+    } else {
+      console.log(`🚀 Server is running on port ${PORT}`);
+    }
+  });
+
+  return { server };
+}
+
+const ready = start().catch((err) => {
+  console.error('❌ Fatal startup error:', err);
+  // Do not exit in a serverless environment; let the platform surface the error.
+  throw err;
 });
+
+// `node src/server.js` / `node index.js` start listening immediately.
+// Serverless wrappers can also use the app function and `await ready`.
+module.exports = app;
+module.exports.ready = ready;
+module.exports.createServers = createServers;

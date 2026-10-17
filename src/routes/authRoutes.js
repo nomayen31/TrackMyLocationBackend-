@@ -1,9 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../auth');
-const { fromNodeHeaders } = require('better-auth/node');
 const authMiddleware = require('../middleware/authMiddleware');
 const pool = require('../config/db');
+
+/**
+ * Convert Node request headers into a Fetch `Headers` object.
+ *
+ * `better-auth/node` is an ES module in v1.7+, so it must be imported
+ * dynamically — a static require() throws ERR_REQUIRE_ESM on runtimes without
+ * require(ESM) (for example some serverless Node builds).
+ */
+async function toFetchHeaders(req) {
+  const { fromNodeHeaders } = await import('better-auth/node');
+  return fromNodeHeaders(req.headers);
+}
 
 /**
  * Copy the headers (notably `set-cookie`) produced by a Better Auth server
@@ -50,7 +61,7 @@ router.post('/signup', async (req, res) => {
 
     const result = await auth.api.signUpEmail({
       body: { name, email, password },
-      headers: fromNodeHeaders(req.headers),
+      headers: await toFetchHeaders(req),
       returnHeaders: true,
       returnStatus: true,
     });
@@ -104,7 +115,7 @@ router.post('/login', async (req, res) => {
 
     const result = await auth.api.signInEmail({
       body: { email, password },
-      headers: fromNodeHeaders(req.headers),
+      headers: await toFetchHeaders(req),
       returnHeaders: true,
       returnStatus: true,
     });
@@ -119,7 +130,7 @@ router.post('/login', async (req, res) => {
 router.post('/logout', async (req, res) => {
   try {
     const result = await auth.api.signOut({
-      headers: fromNodeHeaders(req.headers),
+      headers: await toFetchHeaders(req),
       returnHeaders: true,
       returnStatus: true,
     });

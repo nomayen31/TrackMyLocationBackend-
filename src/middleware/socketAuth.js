@@ -33,7 +33,8 @@ module.exports = async function socketAuth(socket, next) {
     }
 
     const { auth } = require('../auth');
-    const { fromNodeHeaders } = require('better-auth/node');
+    // `better-auth/node` is ESM-only in v1.7+ — import() is the safe form.
+    const { fromNodeHeaders } = await import('better-auth/node');
 
     const headers = fromNodeHeaders(socket.handshake.headers);
     const session = await auth.api.getSession({ headers });
